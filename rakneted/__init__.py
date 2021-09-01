@@ -12,37 +12,36 @@ MAGIC = bytes([
     0x12, 0x34, 0x56, 0x78
 ])
 
-PACKET_IDS = {
-    "Unconnected Ping": 0x01,
-    "Unconnected Ping Open Connections": 0x02,
-    "Unconnected Pong": 0x1c,
-    "Open Connection Request 1": 0x05,
-    "Incompatible Protocol Version": 0x19,
-    "Open Connection Reply 1": 0x06,
-    "Open Connection Request 2": 0x07,
-    "Open Connection Reply 2": 0x08,
-    "Connection Request": 0x09,
-    "Connection Request Accepted": 0x10,
-    "New Incoming Connection": 0x13,
-    "ACK": 0xc0,
-    "NAK": 0xa0
-}
-
-def decode_unconnected_ping(
-    data: bytes,
-    protocol_version: int,
-    has_open_connections: bool=False
-) -> dict:
-    packet_id: int = PACKET_IDS[
-        "Unconnected Ping Open Connections"
-        if has_open_connections else
-        "Unconnected Ping"
-    ]
+def decode_unconnected_ping(data: bytes) -> dict:
     packet: dict = {}
-    assert data[0] == packet_id, "Invalid packet id"
-    packet["ID"] = data[0]
-    packet["Client Timestamp"] = struct.unpack(">q", data[1:9])[0]
+    packet["id"] = data[0]
+    packet["client_timestamp"] = struct.unpack(">q", data[1:9])[0]
     assert data[9:25] == MAGIC, "Invalid magic"
-    if protocol_version >= 8:
-        packet["Client GUID"] = struct.unpack(">q", data[25:33])[0]
+    if len(data) <= 9:
+        packet["client_guid"] = struct.unpack(">q", data[25:33])[0]
     return packet
+
+def encode_unconnected_ping(packet: dict) -> bytes:
+    data: bytes = b""
+    data += bytes([packet["id"]])
+    data += struct.pack(">q", packet["client_timestamp"])
+    data += MAGIC
+    if "client_guid" in packet:
+        data += struct.pack(">q", packet["client_guid"])
+        
+def decode_unconnected_pong(data: bytes) -> dict:
+    packet: dict = {}
+    packet["id"] = data[0]
+    packet["client_timestamp"] = struct.unpack(">q", data[1:9])[0]
+    packet["server_guid"] = struct.unpack(">q", data[9:17])[0]
+    assert data[17:33] == MAGIC, "Invalid magic"
+    packet["data"] = data[33:]
+    return packet
+
+def encode_unconnected_pong(packet: dict) -> bytes:
+    data: bytes = b""
+    data += bytes([packet["id"]])
+    data += struct.pack(">q", packet["client_timestamp"])
+    data += struct.pack(">q", packet["server_guid"]) 
+    data += MAGIC
+    data += packet["data"]
